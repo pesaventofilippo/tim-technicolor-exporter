@@ -12,6 +12,9 @@ class TimModemAPI:
         self._session = requests.Session()
         self._last_down = 0
         self._last_up = 0
+        self._down_offset = 0
+        self._up_offset = 0
+        self.FIRST_RUN = True
 
     def login(self):
         preauth_data = self._session.get(f"http://{self.router_ip}/login.lp?get_preauth=true")
@@ -51,7 +54,14 @@ class TimModemAPI:
 
     def get_internet_delta(self) -> (int, int):
         down, up = self._get_internet_raw()
+
+        if self.FIRST_RUN:
+            self._down_offset = down
+            self._up_offset = up
+            self.FIRST_RUN = False
+
         down_delta = self._bytes_delta(down, self._last_down)
         up_delta = self._bytes_delta(up, self._last_up)
+
         self._last_down, self._last_up = down, up
-        return down_delta, up_delta
+        return down_delta - self._down_offset, up_delta - self._up_offset
