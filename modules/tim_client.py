@@ -15,7 +15,7 @@ class TimModemAPI:
         self.FIRST_RUN = True
 
     def login(self):
-        preauth_data = self._session.get(f"http://{self.router_ip}/login.lp?get_preauth=true")
+        preauth_data = self._session.get(f"http://{self.router_ip}/login.lp?get_preauth=true", timeout=2)
         rn, realm, nonce, qop = preauth_data.text.split('|')
 
         HA1 = hashlib.md5(f"{self.username}:{realm}:{self.password}".encode()).hexdigest()
@@ -28,7 +28,7 @@ class TimModemAPI:
             'user': self.username
         }
 
-        self._session.post(f"http://{self.router_ip}/login.lp", data=login_data)
+        self._session.post(f"http://{self.router_ip}/login.lp", data=login_data, timeout=2)
 
     @staticmethod
     def _bytes_delta(_bytes: int, _last: int) -> int:
@@ -38,20 +38,24 @@ class TimModemAPI:
 
     def _get_internet_raw(self, _retrycount: int=0) -> (int, int):
         try:
-            res = self._session.get(f"http://{self.router_ip}/network-expert-internet.lp?ip=&phoneType=undefined")
+            res = self._session.get(f"http://{self.router_ip}/network-expert-internet.lp?ip=&phoneType=undefined",
+                                    timeout=0.3)
             pattern = r'userfriendlydisplay1\("([^"]+)"\)'
             up, down = re.findall(pattern, res.text)
             return int(down), int(up)
-        except Exception:
-            if _retrycount < 3:
+        except (requests.exceptions.Timeout, ValueError):
+            if _retrycount < 2:
                 time.sleep(0.2)
-                self.login()
                 return self._get_internet_raw(_retrycount+1)
             else:
-                raise
+                self.login()
+                return self._get_internet_raw()
 
     def get_internet_delta(self) -> (int, int):
-        down, up = self._get_internet_raw()
+        try:
+            down, up = self._get_internet_raw()
+        except requests.exceptions.Timeout:
+            return self._last_down, self._last_up
 
         if self.FIRST_RUN:
             self._last_down, self._last_up = down, up
