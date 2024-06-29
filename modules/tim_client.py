@@ -55,7 +55,7 @@ class TimModemAPI:
         try:
             down, up = self._get_internet_raw()
         except requests.exceptions.Timeout:
-            return self._last_down, self._last_up
+            return 0, 0
 
         if self.FIRST_RUN:
             self._last_down, self._last_up = down, up
